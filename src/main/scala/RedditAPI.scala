@@ -18,20 +18,20 @@ object RedditAPI {
   def popularLinks(subreddit: String)(implicit ec: ExecutionContext): Future[LinkListing] = 
     withRetry(timedFuture(s"links: r/$subreddit/top"){
       val page = url(s"http://www.reddit.com/r/$subreddit/top.json") <<? Map("limit" -> linksToFetch.toString, "t" -> "all") <:< useragent
-      Http(page OK dispatch.as.json4s.Json).map(LinkListing.fromJson(subreddit)(_))
+      Http.configure(_ setFollowRedirects true)(page OK dispatch.as.json4s.Json).map(LinkListing.fromJson(subreddit)(_))
     }, LinkListing(Seq.empty))
 
   def popularComments(link: Link)(implicit ec: ExecutionContext): Future[CommentListing] = 
     withRetry(timedFuture(s"comments: r/${link.subreddit}/${link.id}/comments"){
       val page = url(s"http://www.reddit.com/r/${link.subreddit}/comments/${link.id}.json") <<? Map("depth" -> commentDepth.toString, "limit" -> commentsToFetch.toString) <:< useragent
-      Http(page OK dispatch.as.json4s.Json).map(json => CommentListing.fromJson(json, link.subreddit))
+      Http.configure(_ setFollowRedirects true)(page OK dispatch.as.json4s.Json).map(json => CommentListing.fromJson(json, link.subreddit))
     }, CommentListing(link.subreddit, Seq.empty))
 
 
   def popularSubreddits(implicit ec: ExecutionContext): Future[Seq[String]] = 
     timedFuture("fetch popular subreddits"){
       val page = url(s"http://www.reddit.com/subreddits/popular.json").GET <<? Map("limit" -> subredditsToFetch.toString) <:< useragent
-      Http(page OK dispatch.as.json4s.Json).map{ json =>
+      Http.configure(_ setFollowRedirects true)(page OK dispatch.as.json4s.Json).map{ json =>
         json.\("data").\("children").children
           .map(_.\("data").\("url"))
           .collect{ case JString(url) => url.substring(3, url.length - 1) }
